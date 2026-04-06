@@ -1,4 +1,4 @@
-Output demo.gif
+Output assets/demo.gif
 
 Set Shell "bash"
 Set FontSize 14
@@ -9,9 +9,9 @@ Set Padding 20
 Set TypingSpeed 60ms
 
 # Start envi with example directory
-Type "cargo run --release -- example/"
+Type "envi example/"
 Enter
-Sleep 3s
+Sleep 2s
 
 # Navigate through variables
 Sleep 1s

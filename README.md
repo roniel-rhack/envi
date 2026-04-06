@@ -1,22 +1,31 @@
+<div align="center">
+
 # envi
 
-A terminal UI for managing `.env` files — diff, scan, edit, and validate environment variables across projects and profiles.
+**Stop editing `.env` files blind.**
 
-<p align="center">
-  <img src="demo.gif" alt="envi demo" width="800" />
-</p>
+Diff, scan, edit, and validate environment variables across all your profiles — right from the terminal.
 
-## Why?
+[![CI](https://github.com/roniel-rhack/envi/actions/workflows/ci.yml/badge.svg)](https://github.com/roniel-rhack/envi/actions/workflows/ci.yml)
+[![Release](https://github.com/roniel-rhack/envi/releases/latest/badge.svg)](https://github.com/roniel-rhack/envi/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Every project has `.env` files. Managing them is painful:
+<img src="assets/demo.gif" alt="envi demo" width="800" />
 
-- You pull a repo and your `.env` is missing vars that were added to `.env.example`
-- You can't remember which env vars go where across 10 projects
-- Comparing dev vs production configs means opening two files side by side
-- You have no idea which env vars in your `.env` are actually used in code
-- Sensitive values sit in plaintext
+</div>
 
-**envi** solves all of this in a fast, keyboard-driven TUI.
+---
+
+## The Problem
+
+Every developer knows the pain:
+
+- You pull a repo and `.env` is missing 5 vars that were added to `.env.example`
+- Comparing dev vs production means opening two files and squinting
+- You have no idea which env vars your code actually uses
+- Sensitive values sit in plaintext, one `git add .` away from disaster
+
+**envi** gives you a single dashboard for all of it.
 
 ## Install
 
@@ -29,61 +38,62 @@ brew install envi
 
 ### Download binary
 
-Grab the latest binary for your platform from the [Releases](https://github.com/roniel-rhack/envi/releases) page.
+Grab the latest from [**Releases**](https://github.com/roniel-rhack/envi/releases) — available for **macOS** (arm64, amd64), **Linux** (arm64, amd64), and **Windows** (amd64).
 
-Available for: **macOS** (arm64, amd64), **Linux** (arm64, amd64), **Windows** (amd64).
-
-### From source (requires Rust)
+### From source
 
 ```bash
-git clone https://github.com/roniel-rhack/envi
-cd envi
+git clone https://github.com/roniel-rhack/envi && cd envi
 cargo build --release
-# Binary at ./target/release/envi
+# Binary at ./target/release/envi (~2 MB)
 ```
 
-## Usage
+## Quick Start
 
 ```bash
 # Run in current directory
 envi
 
-# Run in a specific directory
-envi /path/to/project
+# Run in a specific project
+envi ~/projects/my-app
 ```
+
+envi auto-discovers all `.env` variants: `.env`, `.env.local`, `.env.development`, `.env.staging`, `.env.production`, `.env.example`, `.env.test`, and any `.env.*` file.
 
 ## Features
 
 ### Browse & Edit
 
-Navigate through your `.env` files with vim-style keybindings. Edit values inline. Add and delete variables.
+Navigate your env files with vim-style keys. Edit values inline. Add or delete variables. Save when you're ready.
 
-### Diff View (`d`)
+### Diff View  `d`
 
-Compare any two `.env` files side by side. Instantly see:
-- **Missing** vars (in source but not target)
-- **Extra** vars (in target but not source)
-- **Changed** values between profiles
-- Press `Tab` to cycle through diff targets
+Compare any two `.env` files instantly:
 
-### Code Scanner (`s`)
+| Symbol | Meaning |
+|--------|---------|
+| `- MISSING` | In source but not in target |
+| `+ EXTRA` | In target but not in source |
+| `~ CHANGED` | Different values between files |
 
-Scans your entire project source code for environment variable references. Detects patterns across 10+ languages:
-- `process.env.VAR` (JS/TS)
-- `os.environ["VAR"]` / `os.getenv("VAR")` (Python)
-- `env::var("VAR")` (Rust)
-- `os.Getenv("VAR")` (Go)
-- `System.getenv("VAR")` (Java)
-- `${VAR}` / `$VAR` (Shell/Docker/YAML)
-- And more...
+Press `Tab` to cycle through diff targets.
 
-Reports:
-- Vars used in code but **not defined** in any `.env` file
-- Vars defined in `.env` but **never used** in code
+### Code Scanner  `s`
 
-### Search (`/`)
+Scans your project for env var references across **10+ languages**:
 
-Fuzzy search across variable names and values with live matching.
+```
+process.env.VAR        (JS/TS)          os.environ["VAR"]    (Python)
+env::var("VAR")        (Rust)           os.Getenv("VAR")     (Go)
+System.getenv("VAR")   (Java)           ENV["VAR"]           (Ruby)
+${VAR} / $VAR          (Shell/Docker)   getenv("VAR")        (PHP/C)
+```
+
+Reports vars **used in code but not defined**, and vars **defined but never used**.
+
+### Search  `/`
+
+Live fuzzy search across variable names and values.
 
 ### Validation
 
@@ -93,36 +103,39 @@ Automatic warnings for:
 - Non-UPPER_SNAKE_CASE keys
 - Variables missing from other profiles
 
-### Profile Awareness
+### Cross-File Awareness
 
-Auto-discovers all `.env` variants: `.env`, `.env.local`, `.env.development`, `.env.staging`, `.env.production`, `.env.example`, `.env.test`, and any other `.env.*` files.
+The details panel shows which other profiles contain (or are missing) the selected variable — no more guessing.
 
 ## Keybindings
 
 | Key | Action |
-|-----|--------|
-| `j`/`k` or `↓`/`↑` | Navigate up/down |
-| `h`/`l` or `←`/`→` | Switch profile |
-| `Tab` / `Shift+Tab` | Switch panel |
-| `e` or `Enter` | Edit selected value |
-| `a` | Add new variable |
+|:---:|--------|
+| `j` `k` | Navigate up / down |
+| `h` `l` | Previous / next profile |
+| `Tab` | Switch panel |
+| `e` | Edit value |
+| `a` | Add variable |
 | `x` | Delete variable |
-| `w` | Save file |
-| `r` | Reload all files |
-| `d` | Toggle diff view |
-| `s` | Toggle code scan |
+| `w` | Save |
+| `r` | Reload |
+| `d` | Diff view |
+| `s` | Code scan |
 | `/` | Search |
-| `n` | Next search match |
+| `n` | Next match |
 | `?` | Help |
-| `q` / `Esc` | Quit |
+| `q` | Quit |
 
-## Tech
+## Built With
 
-- **Rust** — fast, safe, single binary
-- **ratatui** — modern TUI framework
-- **crossterm** — cross-platform terminal handling
-- **2 MB** binary, zero runtime dependencies
+| | |
+|---|---|
+| **Language** | Rust — fast, safe, single binary |
+| **TUI** | [ratatui](https://github.com/ratatui/ratatui) + [crossterm](https://github.com/crossterm-rs/crossterm) |
+| **Binary size** | ~2 MB |
+| **Dependencies** | Zero runtime dependencies |
+| **Platforms** | macOS, Linux, Windows |
 
 ## License
 
-MIT
+[MIT](LICENSE)
