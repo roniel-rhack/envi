@@ -2,6 +2,13 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum QuoteStyle {
+    None,
+    Double,
+    Single,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnvEntry {
     pub key: String,
@@ -9,6 +16,8 @@ pub struct EnvEntry {
     pub comment: Option<String>,
     pub line_number: usize,
     pub is_encrypted: bool,
+    pub has_export: bool,
+    pub quote_style: QuoteStyle,
 }
 
 #[derive(Debug, Clone)]
@@ -67,11 +76,17 @@ pub fn parse_content(content: &str, path: PathBuf) -> EnvFile {
         }
 
         // Remove optional "export " prefix
-        let line_content = trimmed.strip_prefix("export ").unwrap_or(trimmed);
+        let has_export = trimmed.starts_with("export ");
+        let line_content = if has_export {
+            &trimmed["export ".len()..]
+        } else {
+            trimmed
+        };
 
         match parse_line(line_content, line_number) {
             Ok(mut entry) => {
                 entry.comment = pending_comment.take();
+                entry.has_export = has_export;
                 entries.push(entry);
             }
             Err(msg) => {
@@ -99,7 +114,7 @@ fn parse_line(line: &str, line_number: usize) -> Result<EnvEntry, String> {
     }
 
     let raw_value = line[eq_pos + 1..].trim();
-    let (value, is_encrypted) = parse_value(raw_value);
+    let (value, is_encrypted, quote_style) = parse_value(raw_value);
 
     Ok(EnvEntry {
         key,
@@ -107,26 +122,26 @@ fn parse_line(line: &str, line_number: usize) -> Result<EnvEntry, String> {
         comment: None,
         line_number,
         is_encrypted,
+        has_export: false,
+        quote_style,
     })
 }
 
-fn parse_value(raw: &str) -> (String, bool) {
+fn parse_value(raw: &str) -> (String, bool, QuoteStyle) {
     let is_encrypted = raw.starts_with("ENC[") && raw.ends_with(']');
 
-    let value = if (raw.starts_with('"') && raw.ends_with('"'))
-        || (raw.starts_with('\'') && raw.ends_with('\''))
-    {
-        if raw.len() >= 2 {
-            raw[1..raw.len() - 1].to_string()
-        } else {
-            raw.to_string()
-        }
-    } else {
-        // Strip inline comments (but not inside quotes)
-        raw.split(" #").next().unwrap_or(raw).trim().to_string()
-    };
+    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
+        let value = raw[1..raw.len() - 1].to_string();
+        return (value, is_encrypted, QuoteStyle::Double);
+    }
 
-    (value, is_encrypted)
+    if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
+        let value = raw[1..raw.len() - 1].to_string();
+        return (value, is_encrypted, QuoteStyle::Single);
+    }
+
+    let value = raw.split(" #").next().unwrap_or(raw).trim().to_string();
+    (value, is_encrypted, QuoteStyle::None)
 }
 
 pub fn discover_env_files(dir: &Path) -> Vec<PathBuf> {
@@ -187,21 +202,51 @@ pub fn write_env_file(env_file: &EnvFile) -> Result<(), String> {
         if let Some(comment) = &entry.comment {
             output.push_str(&format!("# {}\n", comment));
         }
-        let needs_quotes = entry.value.contains(' ')
-            || entry.value.contains('#')
-            || entry.value.contains('"')
-            || entry.value.is_empty();
 
-        if needs_quotes {
-            let escaped = entry.value.replace('"', "\\\"");
-            output.push_str(&format!("{}=\"{}\"\n", entry.key, escaped));
-        } else {
-            output.push_str(&format!("{}={}\n", entry.key, entry.value));
+        let prefix = if entry.has_export { "export " } else { "" };
+
+        match entry.quote_style {
+            QuoteStyle::Double => {
+                let escaped = entry.value.replace('\\', "\\\\").replace('"', "\\\"");
+                output.push_str(&format!("{}{}=\"{}\"\n", prefix, entry.key, escaped));
+            }
+            QuoteStyle::Single => {
+                output.push_str(&format!("{}{}='{}'\n", prefix, entry.key, entry.value));
+            }
+            QuoteStyle::None => {
+                let needs_quotes = entry.value.contains(' ')
+                    || entry.value.contains('#')
+                    || entry.value.contains('"')
+                    || entry.value.is_empty();
+
+                if needs_quotes {
+                    let escaped = entry.value.replace('\\', "\\\\").replace('"', "\\\"");
+                    output.push_str(&format!("{}{}=\"{}\"\n", prefix, entry.key, escaped));
+                } else {
+                    output.push_str(&format!("{}{}={}\n", prefix, entry.key, entry.value));
+                }
+            }
         }
     }
 
-    fs::write(&env_file.path, output)
-        .map_err(|e| format!("Failed to write {}: {}", env_file.path.display(), e))
+    // Atomic write: write to temp file, then rename
+    let dir = env_file.path.parent().ok_or("No parent directory")?;
+    let temp_path = dir.join(format!(".envi_tmp_{}", std::process::id()));
+
+    fs::write(&temp_path, &output).map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    // Preserve original file permissions on Unix
+    #[cfg(unix)]
+    {
+        if let Ok(metadata) = fs::metadata(&env_file.path) {
+            let _ = fs::set_permissions(&temp_path, metadata.permissions());
+        }
+    }
+
+    fs::rename(&temp_path, &env_file.path).map_err(|e| {
+        let _ = fs::remove_file(&temp_path);
+        format!("Failed to save {}: {}", env_file.path.display(), e)
+    })
 }
 
 #[cfg(test)]
@@ -261,5 +306,116 @@ mod tests {
         let content = "KEY=";
         let env = parse_content(content, PathBuf::from(".env"));
         assert_eq!(env.entries[0].value, "");
+    }
+
+    #[test]
+    fn test_parse_value_with_equals_sign() {
+        let content = "URL=https://host?a=1&b=2";
+        let env = parse_content(content, PathBuf::from(".env"));
+        assert_eq!(env.entries[0].key, "URL");
+        assert_eq!(env.entries[0].value, "https://host?a=1&b=2");
+    }
+
+    #[test]
+    fn test_parse_malformed_no_equals() {
+        let content = "NOEQUALS";
+        let env = parse_content(content, PathBuf::from(".env"));
+        assert_eq!(env.entries.len(), 0);
+        assert_eq!(env.errors.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_empty_key() {
+        let content = "=value";
+        let env = parse_content(content, PathBuf::from(".env"));
+        assert_eq!(env.entries.len(), 0);
+        assert_eq!(env.errors.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_empty_content() {
+        let content = "";
+        let env = parse_content(content, PathBuf::from(".env"));
+        assert_eq!(env.entries.len(), 0);
+        assert_eq!(env.errors.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_preserves_export_flag() {
+        let content = "export KEY=value";
+        let env = parse_content(content, PathBuf::from(".env"));
+        assert!(env.entries[0].has_export);
+    }
+
+    #[test]
+    fn test_parse_no_export_flag() {
+        let content = "KEY=value";
+        let env = parse_content(content, PathBuf::from(".env"));
+        assert!(!env.entries[0].has_export);
+    }
+
+    #[test]
+    fn test_parse_double_quote_style() {
+        let content = "KEY=\"hello world\"";
+        let env = parse_content(content, PathBuf::from(".env"));
+        assert_eq!(env.entries[0].quote_style, QuoteStyle::Double);
+        assert_eq!(env.entries[0].value, "hello world");
+    }
+
+    #[test]
+    fn test_parse_single_quote_style() {
+        let content = "KEY='hello world'";
+        let env = parse_content(content, PathBuf::from(".env"));
+        assert_eq!(env.entries[0].quote_style, QuoteStyle::Single);
+        assert_eq!(env.entries[0].value, "hello world");
+    }
+
+    #[test]
+    fn test_parse_no_quote_style() {
+        let content = "KEY=simple";
+        let env = parse_content(content, PathBuf::from(".env"));
+        assert_eq!(env.entries[0].quote_style, QuoteStyle::None);
+    }
+
+    #[test]
+    fn test_write_roundtrip() {
+        let dir = std::env::temp_dir().join("envi_test_roundtrip");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(".env");
+
+        let original = "# Comment\nKEY=simple\nSPACED=\"hello world\"\nEMPTY=\n";
+        std::fs::write(&path, original).unwrap();
+
+        let env = parse_file(&path).unwrap();
+        write_env_file(&env).unwrap();
+        let env2 = parse_file(&path).unwrap();
+
+        assert_eq!(env.entries.len(), env2.entries.len());
+        for (a, b) in env.entries.iter().zip(env2.entries.iter()) {
+            assert_eq!(a.key, b.key);
+            assert_eq!(a.value, b.value);
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_write_preserves_export() {
+        let dir = std::env::temp_dir().join("envi_test_export_rt");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(".env");
+
+        let original = "export KEY=value\n";
+        std::fs::write(&path, original).unwrap();
+
+        let env = parse_file(&path).unwrap();
+        write_env_file(&env).unwrap();
+
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(written.contains("export KEY=value"));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

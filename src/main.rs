@@ -2,7 +2,7 @@ mod app;
 mod env;
 mod ui;
 
-use app::{App, AppMode};
+use app::{App, AppMode, Panel};
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -36,6 +36,14 @@ fn main() -> io::Result<()> {
         eprintln!("Error: {} is not a directory", project_dir.display());
         std::process::exit(1);
     }
+
+    // Install panic hook to restore terminal on crash
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let _ = terminal::disable_raw_mode();
+        let _ = io::stdout().execute(LeaveAlternateScreen);
+        original_hook(panic_info);
+    }));
 
     // Setup terminal
     terminal::enable_raw_mode()?;
@@ -106,7 +114,7 @@ fn handle_key(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
 
 fn handle_normal_key(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
     match key {
-        KeyCode::Char('q') => app.running = false,
+        KeyCode::Char('q') => app.quit(),
         KeyCode::Char('?') => app.toggle_help(),
 
         // Navigation
@@ -128,15 +136,8 @@ fn handle_normal_key(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
         KeyCode::Char('l') | KeyCode::Right => app.next_profile(),
         KeyCode::PageDown => app.page_down(),
         KeyCode::PageUp => app.page_up(),
-        KeyCode::Home => {
-            app.var_index = 0;
-        }
-        KeyCode::End => {
-            let count = app.current_entry_count();
-            if count > 0 {
-                app.var_index = count - 1;
-            }
-        }
+        KeyCode::Home => app.go_to_first_var(),
+        KeyCode::End => app.go_to_last_var(),
 
         // Panel switching
         KeyCode::Tab => {
@@ -161,7 +162,7 @@ fn handle_normal_key(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
         KeyCode::Char('/') => app.start_search(),
         KeyCode::Char('n') => app.next_search_match(),
 
-        KeyCode::Esc => app.running = false,
+        KeyCode::Esc => app.quit(),
         _ => {}
     }
 }
@@ -183,30 +184,21 @@ fn handle_edit_key(app: &mut App, key: KeyCode) {
 
 fn handle_diff_key(app: &mut App, key: KeyCode) {
     match key {
-        KeyCode::Esc | KeyCode::Char('d') => {
-            app.mode = AppMode::Normal;
-            app.diff_result = None;
-        }
+        KeyCode::Esc | KeyCode::Char('d') => app.close_diff(),
         KeyCode::Tab => app.cycle_diff_target(),
-        KeyCode::Char('q') => app.running = false,
-        KeyCode::Char('j') | KeyCode::Down => app.diff_scroll += 1,
-        KeyCode::Char('k') | KeyCode::Up => {
-            app.diff_scroll = app.diff_scroll.saturating_sub(1);
-        }
+        KeyCode::Char('q') => app.quit(),
+        KeyCode::Char('j') | KeyCode::Down => app.scroll_down("diff"),
+        KeyCode::Char('k') | KeyCode::Up => app.scroll_up("diff"),
         _ => {}
     }
 }
 
 fn handle_scan_key(app: &mut App, key: KeyCode) {
     match key {
-        KeyCode::Esc | KeyCode::Char('s') => {
-            app.mode = AppMode::Normal;
-        }
-        KeyCode::Char('q') => app.running = false,
-        KeyCode::Char('j') | KeyCode::Down => app.scan_scroll += 1,
-        KeyCode::Char('k') | KeyCode::Up => {
-            app.scan_scroll = app.scan_scroll.saturating_sub(1);
-        }
+        KeyCode::Esc | KeyCode::Char('s') => app.close_scan(),
+        KeyCode::Char('q') => app.quit(),
+        KeyCode::Char('j') | KeyCode::Down => app.scroll_down("scan"),
+        KeyCode::Char('k') | KeyCode::Up => app.scroll_up("scan"),
         _ => {}
     }
 }
@@ -247,5 +239,3 @@ fn handle_confirm_key(app: &mut App, key: KeyCode) {
         _ => {}
     }
 }
-
-use app::Panel;

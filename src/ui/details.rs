@@ -70,13 +70,11 @@ pub fn render_details(frame: &mut Frame, app: &App, area: Rect) {
         )));
     } else {
         // Word-wrap long values
-        for chunk in entry.value.as_bytes().chunks(40) {
-            if let Ok(s) = std::str::from_utf8(chunk) {
-                lines.push(Line::from(Span::styled(
-                    format!("  {}", s),
-                    Style::default().fg(Color::White),
-                )));
-            }
+        for chunk in crate::ui::helpers::char_chunks(&entry.value, 40) {
+            lines.push(Line::from(Span::styled(
+                format!("  {}", chunk),
+                Style::default().fg(Color::White),
+            )));
         }
     }
 
@@ -120,11 +118,18 @@ pub fn render_details(frame: &mut Frame, app: &App, area: Rect) {
     if entry.value.is_empty() && !entry.is_encrypted {
         warnings.push("Empty value".to_string());
     }
-    if entry.value.contains("password")
-        || entry.value.contains("secret")
-        || entry.value.contains("token")
     {
-        warnings.push("Possibly sensitive — consider encrypting".to_string());
+        let key_lower = entry.key.to_lowercase();
+        if key_lower.contains("password")
+            || key_lower.contains("secret")
+            || key_lower.contains("token")
+            || key_lower.contains("api_key")
+            || key_lower.contains("private_key")
+            || key_lower.contains("credential")
+            || key_lower.contains("auth")
+        {
+            warnings.push("Possibly sensitive — consider encrypting".to_string());
+        }
     }
     if entry.key != entry.key.to_uppercase() {
         warnings.push("Key is not UPPER_SNAKE_CASE".to_string());

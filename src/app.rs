@@ -26,6 +26,7 @@ pub enum ConfirmAction {
     DeleteVar,
     #[allow(dead_code)]
     SaveFile,
+    QuitWithoutSave,
 }
 
 pub struct App {
@@ -180,7 +181,7 @@ impl App {
         if let Some(file) = self.current_file() {
             if let Some(entry) = file.entries.get(self.var_index) {
                 self.edit_buffer = entry.value.clone();
-                self.edit_cursor = self.edit_buffer.len();
+                self.edit_cursor = self.edit_buffer.chars().count();
                 self.mode = AppMode::Editing;
             }
         }
@@ -205,20 +206,24 @@ impl App {
     }
 
     pub fn edit_insert(&mut self, c: char) {
-        self.edit_buffer.insert(self.edit_cursor, c);
+        let byte_pos = self.char_to_byte(self.edit_cursor);
+        self.edit_buffer.insert(byte_pos, c);
         self.edit_cursor += 1;
     }
 
     pub fn edit_backspace(&mut self) {
         if self.edit_cursor > 0 {
             self.edit_cursor -= 1;
-            self.edit_buffer.remove(self.edit_cursor);
+            let byte_pos = self.char_to_byte(self.edit_cursor);
+            self.edit_buffer.remove(byte_pos);
         }
     }
 
     pub fn edit_delete(&mut self) {
-        if self.edit_cursor < self.edit_buffer.len() {
-            self.edit_buffer.remove(self.edit_cursor);
+        let char_count = self.edit_buffer.chars().count();
+        if self.edit_cursor < char_count {
+            let byte_pos = self.char_to_byte(self.edit_cursor);
+            self.edit_buffer.remove(byte_pos);
         }
     }
 
@@ -229,7 +234,8 @@ impl App {
     }
 
     pub fn edit_right(&mut self) {
-        if self.edit_cursor < self.edit_buffer.len() {
+        let char_count = self.edit_buffer.chars().count();
+        if self.edit_cursor < char_count {
             self.edit_cursor += 1;
         }
     }
@@ -239,7 +245,16 @@ impl App {
     }
 
     pub fn edit_end(&mut self) {
-        self.edit_cursor = self.edit_buffer.len();
+        self.edit_cursor = self.edit_buffer.chars().count();
+    }
+
+    /// Convert a char index to a byte offset in edit_buffer.
+    fn char_to_byte(&self, char_idx: usize) -> usize {
+        self.edit_buffer
+            .char_indices()
+            .nth(char_idx)
+            .map(|(i, _)| i)
+            .unwrap_or(self.edit_buffer.len())
     }
 
     // Save
@@ -310,12 +325,11 @@ impl App {
         }
 
         // Collect all defined keys across all env files
-        let all_keys: Vec<String> = self
+        let key_refs: Vec<&str> = self
             .env_files
             .iter()
-            .flat_map(|f| f.entries.iter().map(|e| e.key.clone()))
+            .flat_map(|f| f.entries.iter().map(|e| e.key.as_str()))
             .collect();
-        let key_refs: Vec<&str> = all_keys.iter().map(|s| s.as_str()).collect();
 
         self.scan_result = Some(scanner::scan_project(&self.project_dir, &key_refs));
         self.mode = AppMode::ScanView;
@@ -372,12 +386,30 @@ impl App {
     // Add new variable
     pub fn add_variable(&mut self) {
         if let Some(file) = self.current_file_mut() {
+            let base = "NEW_VAR";
+            let existing_keys: Vec<&str> = file.entries.iter().map(|e| e.key.as_str()).collect();
+
+            let key = if !existing_keys.contains(&base) {
+                base.to_string()
+            } else {
+                let mut n = 1;
+                loop {
+                    let candidate = format!("{}_{}", base, n);
+                    if !existing_keys.contains(&candidate.as_str()) {
+                        break candidate;
+                    }
+                    n += 1;
+                }
+            };
+
             let new_entry = parser::EnvEntry {
-                key: "NEW_VAR".to_string(),
+                key,
                 value: String::new(),
                 comment: None,
                 line_number: file.entries.len() + 1,
                 is_encrypted: false,
+                has_export: false,
+                quote_style: parser::QuoteStyle::None,
             };
             file.entries.push(new_entry);
             self.var_index = file.entries.len() - 1;
@@ -410,6 +442,9 @@ impl App {
             Some(ConfirmAction::SaveFile) => {
                 self.save_current();
             }
+            Some(ConfirmAction::QuitWithoutSave) => {
+                self.running = false;
+            }
             None => {}
         }
         self.mode = AppMode::Normal;
@@ -437,11 +472,56 @@ impl App {
         };
     }
 
+    pub fn quit(&mut self) {
+        if self.dirty {
+            self.confirm_action = Some(ConfirmAction::QuitWithoutSave);
+            self.mode = AppMode::Confirm;
+        } else {
+            self.running = false;
+        }
+    }
+
     pub fn toggle_help(&mut self) {
         if self.mode == AppMode::Help {
             self.mode = AppMode::Normal;
         } else {
             self.mode = AppMode::Help;
+        }
+    }
+
+    pub fn close_diff(&mut self) {
+        self.mode = AppMode::Normal;
+        self.diff_result = None;
+    }
+
+    pub fn close_scan(&mut self) {
+        self.mode = AppMode::Normal;
+    }
+
+    pub fn scroll_down(&mut self, scroll: &str) {
+        match scroll {
+            "diff" => self.diff_scroll += 1,
+            "scan" => self.scan_scroll += 1,
+            _ => {}
+        }
+    }
+
+    pub fn scroll_up(&mut self, scroll: &str) {
+        match scroll {
+            "diff" => self.diff_scroll = self.diff_scroll.saturating_sub(1),
+            "scan" => self.scan_scroll = self.scan_scroll.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    pub fn go_to_first_var(&mut self) {
+        self.var_index = 0;
+    }
+
+    pub fn go_to_last_var(&mut self) {
+        let count = self.current_entry_count();
+        if count > 0 {
+            self.var_index = count - 1;
         }
     }
 
@@ -451,5 +531,232 @@ impl App {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::env::parser::{EnvEntry, EnvFile, QuoteStyle};
+    use std::path::PathBuf;
+
+    fn make_app(entry_count: usize) -> App {
+        let entries: Vec<EnvEntry> = (0..entry_count)
+            .map(|i| EnvEntry {
+                key: format!("KEY_{}", i),
+                value: format!("value_{}", i),
+                comment: None,
+                line_number: i + 1,
+                is_encrypted: false,
+                has_export: false,
+                quote_style: QuoteStyle::None,
+            })
+            .collect();
+        let file = EnvFile {
+            path: PathBuf::from("/tmp/.env"),
+            entries,
+            errors: vec![],
+        };
+        let mut app = App::new(PathBuf::from("/tmp"));
+        app.env_files = vec![file];
+        app.var_index = 0;
+        app
+    }
+
+    fn make_app_multi(file_count: usize, entries_per_file: usize) -> App {
+        let files: Vec<EnvFile> = (0..file_count)
+            .map(|fi| {
+                let entries: Vec<EnvEntry> = (0..entries_per_file)
+                    .map(|i| EnvEntry {
+                        key: format!("KEY_{}", i),
+                        value: format!("value_{}_{}", fi, i),
+                        comment: None,
+                        line_number: i + 1,
+                        is_encrypted: false,
+                        has_export: false,
+                        quote_style: QuoteStyle::None,
+                    })
+                    .collect();
+                EnvFile {
+                    path: PathBuf::from(format!("/tmp/.env.{}", fi)),
+                    entries,
+                    errors: vec![],
+                }
+            })
+            .collect();
+        let mut app = App::new(PathBuf::from("/tmp"));
+        app.env_files = files;
+        app
+    }
+
+    #[test]
+    fn test_next_var_clamps_at_end() {
+        let mut app = make_app(3);
+        app.var_index = 2;
+        app.next_var();
+        assert_eq!(app.var_index, 2);
+    }
+
+    #[test]
+    fn test_prev_var_stays_at_zero() {
+        let mut app = make_app(3);
+        app.var_index = 0;
+        app.prev_var();
+        assert_eq!(app.var_index, 0);
+    }
+
+    #[test]
+    fn test_page_down_clamps() {
+        let mut app = make_app(5);
+        app.var_index = 0;
+        app.page_down();
+        assert_eq!(app.var_index, 4);
+    }
+
+    #[test]
+    fn test_page_up_saturates() {
+        let mut app = make_app(5);
+        app.var_index = 3;
+        app.page_up();
+        assert_eq!(app.var_index, 0);
+    }
+
+    #[test]
+    fn test_next_profile_wraps() {
+        let mut app = make_app_multi(3, 1);
+        app.profile_index = 2;
+        app.next_profile();
+        assert_eq!(app.profile_index, 0);
+    }
+
+    #[test]
+    fn test_prev_profile_wraps() {
+        let mut app = make_app_multi(3, 1);
+        app.profile_index = 0;
+        app.prev_profile();
+        assert_eq!(app.profile_index, 2);
+    }
+
+    #[test]
+    fn test_edit_insert_and_backspace_ascii() {
+        let mut app = make_app(1);
+        app.edit_buffer = "hello".to_string();
+        app.edit_cursor = 5;
+        app.edit_insert('!');
+        assert_eq!(app.edit_buffer, "hello!");
+        assert_eq!(app.edit_cursor, 6);
+        app.edit_backspace();
+        assert_eq!(app.edit_buffer, "hello");
+        assert_eq!(app.edit_cursor, 5);
+    }
+
+    #[test]
+    fn test_edit_insert_multibyte() {
+        let mut app = make_app(1);
+        app.edit_buffer = String::new();
+        app.edit_cursor = 0;
+        app.edit_insert('é');
+        app.edit_insert('ñ');
+        assert_eq!(app.edit_buffer, "éñ");
+        assert_eq!(app.edit_cursor, 2);
+        app.edit_backspace();
+        assert_eq!(app.edit_buffer, "é");
+        assert_eq!(app.edit_cursor, 1);
+    }
+
+    #[test]
+    fn test_edit_backspace_at_zero() {
+        let mut app = make_app(1);
+        app.edit_buffer = "x".to_string();
+        app.edit_cursor = 0;
+        app.edit_backspace();
+        assert_eq!(app.edit_buffer, "x");
+        assert_eq!(app.edit_cursor, 0);
+    }
+
+    #[test]
+    fn test_delete_last_entry_adjusts_index() {
+        let mut app = make_app(2);
+        app.var_index = 1;
+        app.confirm_action = Some(ConfirmAction::DeleteVar);
+        app.confirm_yes();
+        assert_eq!(app.env_files[0].entries.len(), 1);
+        assert_eq!(app.var_index, 0);
+    }
+
+    #[test]
+    fn test_delete_only_entry() {
+        let mut app = make_app(1);
+        app.var_index = 0;
+        app.confirm_action = Some(ConfirmAction::DeleteVar);
+        app.confirm_yes();
+        assert_eq!(app.env_files[0].entries.len(), 0);
+        assert_eq!(app.var_index, 0);
+    }
+
+    #[test]
+    fn test_search_case_insensitive() {
+        let mut app = make_app(3);
+        app.search_query = "key_1".to_string();
+        app.update_search();
+        assert_eq!(app.search_matches, vec![1]);
+    }
+
+    #[test]
+    fn test_next_search_match_wraps() {
+        let mut app = make_app(3);
+        app.search_query = "key".to_string();
+        app.update_search();
+        assert_eq!(app.search_matches.len(), 3);
+        app.search_match_index = 2;
+        app.next_search_match();
+        assert_eq!(app.search_match_index, 0);
+    }
+
+    #[test]
+    fn test_toggle_diff_requires_two_files() {
+        let mut app = make_app(3);
+        app.toggle_diff();
+        assert_eq!(app.mode, AppMode::Normal);
+        assert!(app.status_message.is_some());
+    }
+
+    #[test]
+    fn test_quit_with_dirty_shows_confirm() {
+        let mut app = make_app(1);
+        app.dirty = true;
+        app.quit();
+        assert_eq!(app.mode, AppMode::Confirm);
+        assert_eq!(app.confirm_action, Some(ConfirmAction::QuitWithoutSave));
+        assert!(app.running);
+    }
+
+    #[test]
+    fn test_quit_clean_exits() {
+        let mut app = make_app(1);
+        app.dirty = false;
+        app.quit();
+        assert!(!app.running);
+    }
+
+    #[test]
+    fn test_add_variable_unique_keys() {
+        let mut app = make_app(0);
+        app.mode = AppMode::Normal;
+        app.add_variable();
+        assert_eq!(app.env_files[0].entries[0].key, "NEW_VAR");
+        app.mode = AppMode::Normal;
+        app.add_variable();
+        assert_eq!(app.env_files[0].entries[1].key, "NEW_VAR_1");
+        app.mode = AppMode::Normal;
+        app.add_variable();
+        assert_eq!(app.env_files[0].entries[2].key, "NEW_VAR_2");
+    }
+
+    #[test]
+    fn test_start_edit_on_empty_file() {
+        let mut app = make_app(0);
+        app.start_edit();
+        assert_eq!(app.mode, AppMode::Normal);
     }
 }

@@ -67,22 +67,28 @@ fn render_normal_view(frame: &mut Frame, app: &App, area: Rect, block: Block) {
         }
     };
 
+    let search_set: std::collections::HashSet<usize> = app.search_matches.iter().copied().collect();
+
     let items: Vec<ListItem> = file
         .entries
         .iter()
         .enumerate()
         .map(|(i, entry)| {
             let is_selected = i == app.var_index;
-            let is_search_match = app.search_matches.contains(&i);
+            let is_search_match = search_set.contains(&i);
 
             let value_display = if app.mode == AppMode::Editing && is_selected {
                 let buf = &app.edit_buffer;
-                let cursor = app.edit_cursor;
-                format!("{}|{}", &buf[..cursor], &buf[cursor..])
+                let byte_cursor = buf
+                    .char_indices()
+                    .nth(app.edit_cursor)
+                    .map(|(i, _)| i)
+                    .unwrap_or(buf.len());
+                format!("{}|{}", &buf[..byte_cursor], &buf[byte_cursor..])
             } else if entry.is_encrypted {
                 "[encrypted]".to_string()
-            } else if entry.value.len() > 40 {
-                format!("{}...", &entry.value[..37])
+            } else if entry.value.chars().count() > 40 {
+                crate::ui::helpers::truncate_with_ellipsis(&entry.value, 37)
             } else {
                 entry.value.clone()
             };
@@ -160,8 +166,8 @@ fn render_diff_view(frame: &mut Frame, app: &App, area: Rect, block: Block) {
                 DiffKind::Unchanged => entry.source_value.as_deref().unwrap_or("").to_string(),
             };
 
-            let truncated = if value_info.len() > 35 {
-                format!("{}...", &value_info[..32])
+            let truncated = if value_info.chars().count() > 35 {
+                crate::ui::helpers::truncate_with_ellipsis(&value_info, 32)
             } else {
                 value_info
             };

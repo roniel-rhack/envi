@@ -152,4 +152,55 @@ mod tests {
         let result = diff_files(&a, &b);
         assert_eq!(result.changed_count(), 1);
     }
+
+    #[test]
+    fn test_diff_empty_files() {
+        let a = parse_content("", PathBuf::from(".env"));
+        let b = parse_content("", PathBuf::from(".env.example"));
+        let result = diff_files(&a, &b);
+        assert!(result.entries.is_empty());
+        assert!(!result.has_differences());
+    }
+
+    #[test]
+    fn test_diff_completely_disjoint() {
+        let a = parse_content("A=1\nB=2", PathBuf::from(".env"));
+        let b = parse_content("C=3\nD=4", PathBuf::from(".env.example"));
+        let result = diff_files(&a, &b);
+        assert_eq!(result.missing_count(), 2);
+        assert_eq!(result.extra_count(), 2);
+        assert_eq!(result.changed_count(), 0);
+    }
+
+    #[test]
+    fn test_diff_result_names() {
+        let a = parse_content("KEY=1", PathBuf::from(".env"));
+        let b = parse_content("KEY=1", PathBuf::from(".env.production"));
+        let result = diff_files(&a, &b);
+        assert_eq!(result.source_name, ".env");
+        assert_eq!(result.target_name, ".env.production");
+    }
+
+    #[test]
+    fn test_diff_sort_order() {
+        let a = parse_content("MISSING=1\nCHANGED=old\nSAME=x", PathBuf::from(".env"));
+        let b = parse_content(
+            "EXTRA=new\nCHANGED=new\nSAME=x",
+            PathBuf::from(".env.example"),
+        );
+        let result = diff_files(&a, &b);
+
+        assert_eq!(result.entries[0].kind, DiffKind::Missing);
+        assert_eq!(result.entries[1].kind, DiffKind::Extra);
+        assert_eq!(result.entries[2].kind, DiffKind::Changed);
+        assert_eq!(result.entries[3].kind, DiffKind::Unchanged);
+    }
+
+    #[test]
+    fn test_diff_has_differences_positive() {
+        let a = parse_content("KEY=old", PathBuf::from(".env"));
+        let b = parse_content("KEY=new", PathBuf::from(".env.example"));
+        let result = diff_files(&a, &b);
+        assert!(result.has_differences());
+    }
 }

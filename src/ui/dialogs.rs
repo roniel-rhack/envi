@@ -126,6 +126,7 @@ pub fn render_confirm(frame: &mut Frame, app: &App, area: Rect) {
     let message = match app.confirm_action {
         Some(ConfirmAction::DeleteVar) => "Delete this variable?",
         Some(ConfirmAction::SaveFile) => "Save changes?",
+        Some(ConfirmAction::QuitWithoutSave) => "Quit without saving?",
         None => "Confirm action?",
     };
 
