@@ -7,7 +7,7 @@
 Diff, scan, edit, and validate environment variables across all your profiles — right from the terminal.
 
 [![CI](https://github.com/roniel-rhack/envi/actions/workflows/ci.yml/badge.svg)](https://github.com/roniel-rhack/envi/actions/workflows/ci.yml)
-[![Release](https://github.com/roniel-rhack/envi/releases/latest/badge.svg)](https://github.com/roniel-rhack/envi/releases/latest)
+[![Release](https://img.shields.io/github/v/release/roniel-rhack/envi)](https://github.com/roniel-rhack/envi/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 <img src="assets/demo.gif" alt="envi demo" width="800" />
