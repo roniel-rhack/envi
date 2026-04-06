@@ -20,16 +20,23 @@ Every project has `.env` files. Managing them is painful:
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap roniel-rhack/tap
+brew install envi
+```
+
+### Download binary
+
+Grab the latest binary for your platform from the [Releases](https://github.com/roniel-rhack/envi/releases) page.
+
+Available for: **macOS** (arm64, amd64), **Linux** (arm64, amd64), **Windows** (amd64).
+
 ### From source (requires Rust)
 
 ```bash
-cargo install --path .
-```
-
-### Or build locally
-
-```bash
-git clone https://github.com/yourusername/envi
+git clone https://github.com/roniel-rhack/envi
 cd envi
 cargo build --release
 # Binary at ./target/release/envi
