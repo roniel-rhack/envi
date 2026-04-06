@@ -1,0 +1,27 @@
+[package]
+name = "envi"
+version = "0.1.0"
+edition = "2021"
+description = "A TUI for managing .env files — diff, scan, edit, encrypt"
+license = "MIT"
+repository = "https://github.com/yourusername/envi"
+keywords = ["env", "dotenv", "tui", "terminal", "environment"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
+regex = "1"
+glob = "0.3"
+age = { version = "0.11", features = ["armor"] }
+secrecy = "0.10"
+unicode-width = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
