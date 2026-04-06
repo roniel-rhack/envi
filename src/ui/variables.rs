@@ -78,11 +78,7 @@ fn render_normal_view(frame: &mut Frame, app: &App, area: Rect, block: Block) {
             let value_display = if app.mode == AppMode::Editing && is_selected {
                 let buf = &app.edit_buffer;
                 let cursor = app.edit_cursor;
-                format!(
-                    "{}|{}",
-                    &buf[..cursor],
-                    &buf[cursor..]
-                )
+                format!("{}|{}", &buf[..cursor], &buf[cursor..])
             } else if entry.is_encrypted {
                 "[encrypted]".to_string()
             } else if entry.value.len() > 40 {
@@ -156,30 +152,12 @@ fn render_diff_view(frame: &mut Frame, app: &App, area: Rect, block: Block) {
             let value_info = match entry.kind {
                 DiffKind::Changed => format!(
                     "{} -> {}",
-                    entry
-                        .source_value
-                        .as_deref()
-                        .unwrap_or(""),
-                    entry
-                        .target_value
-                        .as_deref()
-                        .unwrap_or("")
+                    entry.source_value.as_deref().unwrap_or(""),
+                    entry.target_value.as_deref().unwrap_or("")
                 ),
-                DiffKind::Missing => entry
-                    .source_value
-                    .as_deref()
-                    .unwrap_or("")
-                    .to_string(),
-                DiffKind::Extra => entry
-                    .target_value
-                    .as_deref()
-                    .unwrap_or("")
-                    .to_string(),
-                DiffKind::Unchanged => entry
-                    .source_value
-                    .as_deref()
-                    .unwrap_or("")
-                    .to_string(),
+                DiffKind::Missing => entry.source_value.as_deref().unwrap_or("").to_string(),
+                DiffKind::Extra => entry.target_value.as_deref().unwrap_or("").to_string(),
+                DiffKind::Unchanged => entry.source_value.as_deref().unwrap_or("").to_string(),
             };
 
             let truncated = if value_info.len() > 35 {
@@ -192,14 +170,9 @@ fn render_diff_view(frame: &mut Frame, app: &App, area: Rect, block: Block) {
                 Span::styled(prefix, Style::default().fg(color)),
                 Span::styled(
                     format!("{:<20}", entry.key),
-                    Style::default()
-                        .fg(color)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(
-                    format!(" {}", truncated),
-                    Style::default().fg(Color::Gray),
-                ),
+                Span::styled(format!(" {}", truncated), Style::default().fg(Color::Gray)),
             ]))
         })
         .collect();
@@ -222,10 +195,11 @@ fn render_scan_view(frame: &mut Frame, app: &App, area: Rect, block: Block) {
 
     if !scan.undefined_vars.is_empty() {
         items.push(ListItem::new(Line::from(Span::styled(
-            format!("--- Used in code but NOT in .env ({}) ---", scan.undefined_vars.len()),
-            Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::BOLD),
+            format!(
+                "--- Used in code but NOT in .env ({}) ---",
+                scan.undefined_vars.len()
+            ),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ))));
         for var in &scan.undefined_vars {
             let usages = scan.used_vars.get(var).map(|u| u.len()).unwrap_or(0);

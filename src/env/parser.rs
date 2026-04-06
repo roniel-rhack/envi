@@ -30,6 +30,7 @@ impl EnvFile {
         self.entries.iter().find(|e| e.key == key)
     }
 
+    #[allow(dead_code)]
     pub fn keys(&self) -> Vec<&str> {
         self.entries.iter().map(|e| e.key.as_str()).collect()
     }
@@ -40,8 +41,8 @@ impl EnvFile {
 }
 
 pub fn parse_file(path: &Path) -> Result<EnvFile, String> {
-    let content =
-        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
     Ok(parse_content(&content, path.to_path_buf()))
 }
 
@@ -66,11 +67,7 @@ pub fn parse_content(content: &str, path: PathBuf) -> EnvFile {
         }
 
         // Remove optional "export " prefix
-        let line_content = if trimmed.starts_with("export ") {
-            &trimmed[7..]
-        } else {
-            trimmed
-        };
+        let line_content = trimmed.strip_prefix("export ").unwrap_or(trimmed);
 
         match parse_line(line_content, line_number) {
             Ok(mut entry) => {
@@ -84,7 +81,11 @@ pub fn parse_content(content: &str, path: PathBuf) -> EnvFile {
         }
     }
 
-    EnvFile { path, entries, errors }
+    EnvFile {
+        path,
+        entries,
+        errors,
+    }
 }
 
 fn parse_line(line: &str, line_number: usize) -> Result<EnvEntry, String> {

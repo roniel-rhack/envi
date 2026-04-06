@@ -3,10 +3,10 @@ use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiffKind {
-    Missing,        // Key exists in source but not in target
-    Extra,          // Key exists in target but not in source
-    Changed,        // Key exists in both but values differ
-    Unchanged,      // Key exists in both with same value
+    Missing,   // Key exists in source but not in target
+    Extra,     // Key exists in target but not in source
+    Changed,   // Key exists in both but values differ
+    Unchanged, // Key exists in both with same value
 }
 
 #[derive(Debug, Clone)]
@@ -26,17 +26,27 @@ pub struct DiffResult {
 
 impl DiffResult {
     pub fn missing_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.kind == DiffKind::Missing).count()
+        self.entries
+            .iter()
+            .filter(|e| e.kind == DiffKind::Missing)
+            .count()
     }
 
     pub fn extra_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.kind == DiffKind::Extra).count()
+        self.entries
+            .iter()
+            .filter(|e| e.kind == DiffKind::Extra)
+            .count()
     }
 
     pub fn changed_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.kind == DiffKind::Changed).count()
+        self.entries
+            .iter()
+            .filter(|e| e.kind == DiffKind::Changed)
+            .count()
     }
 
+    #[allow(dead_code)]
     pub fn has_differences(&self) -> bool {
         self.entries.iter().any(|e| e.kind != DiffKind::Unchanged)
     }

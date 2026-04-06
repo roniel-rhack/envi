@@ -32,10 +32,7 @@ pub fn render_profiles(frame: &mut Frame, app: &App, area: Rect) {
             let indicator = if i == app.profile_index { "▸ " } else { "  " };
 
             let mut spans = vec![
-                Span::styled(
-                    indicator,
-                    Style::default().fg(Color::Cyan),
-                ),
+                Span::styled(indicator, Style::default().fg(Color::Cyan)),
                 Span::styled(
                     name,
                     if i == app.profile_index {

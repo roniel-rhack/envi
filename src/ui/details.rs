@@ -120,7 +120,10 @@ pub fn render_details(frame: &mut Frame, app: &App, area: Rect) {
     if entry.value.is_empty() && !entry.is_encrypted {
         warnings.push("Empty value".to_string());
     }
-    if entry.value.contains("password") || entry.value.contains("secret") || entry.value.contains("token") {
+    if entry.value.contains("password")
+        || entry.value.contains("secret")
+        || entry.value.contains("token")
+    {
         warnings.push("Possibly sensitive — consider encrypting".to_string());
     }
     if entry.key != entry.key.to_uppercase() {
@@ -197,6 +200,8 @@ pub fn render_details(frame: &mut Frame, app: &App, area: Rect) {
         }
     }
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, area);
 }

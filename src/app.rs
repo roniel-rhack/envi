@@ -1,7 +1,7 @@
 use crate::env::diff::{self, DiffResult};
 use crate::env::parser::{self, EnvFile};
 use crate::env::scanner::{self, ScanResult};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Panel {
@@ -24,6 +24,7 @@ pub enum AppMode {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConfirmAction {
     DeleteVar,
+    #[allow(dead_code)]
     SaveFile,
 }
 
@@ -97,7 +98,7 @@ impl App {
         }
     }
 
-    fn load_env_files(dir: &PathBuf) -> Vec<EnvFile> {
+    fn load_env_files(dir: &Path) -> Vec<EnvFile> {
         let paths = parser::discover_env_files(dir);
         paths
             .iter()

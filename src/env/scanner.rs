@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct EnvUsage {
     pub file: PathBuf,
     pub line: usize,
@@ -38,9 +39,33 @@ pub fn scan_project(project_dir: &Path, defined_keys: &[&str]) -> ScanResult {
     ];
 
     let extensions = [
-        "rs", "js", "ts", "jsx", "tsx", "py", "go", "rb", "java", "kt", "swift", "c", "cpp",
-        "h", "cs", "php", "ex", "exs", "erl", "hs", "ml", "yml", "yaml", "toml", "json",
-        "Dockerfile", "docker-compose.yml",
+        "rs",
+        "js",
+        "ts",
+        "jsx",
+        "tsx",
+        "py",
+        "go",
+        "rb",
+        "java",
+        "kt",
+        "swift",
+        "c",
+        "cpp",
+        "h",
+        "cs",
+        "php",
+        "ex",
+        "exs",
+        "erl",
+        "hs",
+        "ml",
+        "yml",
+        "yaml",
+        "toml",
+        "json",
+        "Dockerfile",
+        "docker-compose.yml",
     ];
 
     scan_dir(
@@ -114,10 +139,7 @@ fn scan_dir(
         let path = entry.path();
 
         if path.is_dir() {
-            let dir_name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if !ignore_dirs.contains(&dir_name) && !dir_name.starts_with('.') {
                 scan_dir(&path, ignore_dirs, extensions, patterns, results);
             }
@@ -125,19 +147,16 @@ fn scan_dir(
         }
 
         if path.is_file() {
-            let file_name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             // Skip .env files themselves
             if file_name.starts_with(".env") {
                 continue;
             }
 
-            let has_valid_ext = extensions.iter().any(|ext| {
-                file_name == *ext || file_name.ends_with(&format!(".{}", ext))
-            });
+            let has_valid_ext = extensions
+                .iter()
+                .any(|ext| file_name == *ext || file_name.ends_with(&format!(".{}", ext)));
 
             if has_valid_ext {
                 scan_file(&path, patterns, results);
@@ -146,11 +165,7 @@ fn scan_dir(
     }
 }
 
-fn scan_file(
-    path: &Path,
-    patterns: &[Regex],
-    results: &mut BTreeMap<String, Vec<EnvUsage>>,
-) {
+fn scan_file(path: &Path, patterns: &[Regex], results: &mut BTreeMap<String, Vec<EnvUsage>>) {
     let content = match fs::read_to_string(path) {
         Ok(c) => c,
         Err(_) => return,
