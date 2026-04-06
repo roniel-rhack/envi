@@ -2,18 +2,9 @@
 
 A terminal UI for managing `.env` files — diff, scan, edit, and validate environment variables across projects and profiles.
 
-```
-┌─ Profiles ──┬─ Variables ─────────────────┬─ Details ───────┐
-│ ▸ .env      │ ▸ DATABASE_URL = postgres:// │ Key: DATABASE_URL│
-│   .env.dev  │   API_KEY      = sk-****    │                 │
-│   .env.prod │   PORT         = 3000       │ Also in:        │
-│   .env.test │   SECRET_KEY   = [encrypted]│   .env.prod     │
-│             │ ✗ REDIS_URL    (missing)    │ Missing from:   │
-│             │                             │   .env.example  │
-├─────────────┴─────────────────────────────┴─────────────────┤
-│ NORMAL  .env  [e]dit [d]iff [s]can [/]search [?]help  envi │
-└─────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="demo.gif" alt="envi demo" width="800" />
+</p>
 
 ## Why?
 
