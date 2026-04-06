@@ -29,7 +29,8 @@ src/
     ├── profiles.rs    # Left panel — file/profile list
     ├── variables.rs   # Center panel — variable list, diff view, scan view
     ├── details.rs     # Right panel — variable details, cross-file presence, warnings
-    └── dialogs.rs     # Modal overlays — help, search, confirm
+    ├── dialogs.rs     # Modal overlays — help, search, confirm
+    └── helpers.rs     # Shared UI utilities — safe string truncation, char chunking
 ```
 
 ## Conventions
@@ -46,6 +47,20 @@ src/
 - **CI** (`ci.yml`): check, test, fmt, clippy on push/PR to main
 - **Release** (`release.yml`): triggered by `v*` tags, builds 5 platform binaries, creates GitHub release, triggers homebrew tap update
 - **Homebrew tap**: `roniel-rhack/homebrew-tap` — auto-updated via repository_dispatch
+
+## Release Checklist
+
+**REQUIRED** every time a new version is tagged and released:
+
+1. Bump version in `Cargo.toml`
+2. Commit, tag (`v*`), and push: `git push origin main --tags`
+3. Wait for the release workflow to complete
+4. **Update release notes** via `gh release edit <tag> --notes "..."` with:
+   - Version header and one-line summary
+   - Categorized changes: Bug Fixes, Features, Performance, Code Quality, Breaking Changes (if any)
+   - Install instructions (Homebrew + binary download)
+   - Link to full changelog
+5. Verify the release page looks correct on GitHub
 
 ## Workflow Orchestration
 
